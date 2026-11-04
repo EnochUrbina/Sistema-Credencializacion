@@ -1,0 +1,10 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {statusOf,publicWorker,csvCell,dateLabel} from '../src/services/domain.js';
+const worker={activa:true,fecha_inicio:'2026-11-01',fecha_vencimiento:'2026-11-30'};
+test('vigencia incluye sus fechas inicial y final',()=>{assert.equal(statusOf(worker,'2026-11-01'),'Vigente');assert.equal(statusOf(worker,'2026-11-30'),'Vigente');});
+test('separa vigencia futura y vencida sin depender del reloj del dispositivo',()=>{assert.equal(statusOf(worker,'2026-10-31'),'No vigente');assert.equal(statusOf(worker,'2026-12-01'),'Vencida');});
+test('la desactivación tiene prioridad sobre la expiración',()=>assert.equal(statusOf({...worker,activa:false},'2027-01-01'),'Inactiva'));
+test('la proyección pública nunca incluye datos privados',()=>{const data=publicWorker({...worker,nombre_completo:'Prueba',curp:'SECRETO',correo:'privado@test',emergencia_telefono:'123',password:'secreto'});assert.equal(data.nombre_completo,'Prueba');for(const k of ['curp','correo','emergencia_telefono','password'])assert.equal(k in data,false);});
+test('CSV evita fórmulas y escapa comillas',()=>{assert.equal(csvCell('=HYPERLINK("x")'),'"\'=HYPERLINK(""x"")"');assert.equal(csvCell('López, Ana'),'"López, Ana"');});
+test('fecha ISO se presenta sin cambiar el día por zona horaria',()=>assert.equal(dateLabel('2026-11-04'),'04/11/2026'));
