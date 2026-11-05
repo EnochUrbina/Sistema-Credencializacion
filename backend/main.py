@@ -31,6 +31,16 @@ seed_database()
 
 app = FastAPI(title="Sistema de Credencialización Web")
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    traceback.print_exc()
+    err_msg = str(exc) or exc.__class__.__name__
+    return JSONResponse(
+        status_code=500,
+        content={"message": f"Error del servidor: {err_msg}"}
+    )
+
 # CORS middleware for dev and production
 app.add_middleware(
     CORSMiddleware,
@@ -358,23 +368,26 @@ async def create_new_worker(
         raise HTTPException(status_code=400, detail={"message": f"Error al registrar: {err_msg}"})
 
     # Trigger Automated Notification: 'Nueva credencial'
-    dispatch_status = send_notification_email(
-        trabajador_nombre=new_row["nombre_completo"],
-        numero_trabajador=new_row["numero_trabajador"],
-        numero_tarjeta=new_row["numero_tarjeta"],
-        tipo_evento="Nueva credencial",
-        destinatario=new_row["correo"],
-        fecha_inicio=new_row["fecha_inicio"],
-        fecha_vencimiento=new_row["fecha_vencimiento"],
-        estado_actualizado=new_row["estado_calculado"]
-    )
-    add_notification_history(
-        trabajador_id=new_row["trabajador_id"],
-        numero_tarjeta=new_row["numero_tarjeta"],
-        tipo_evento="Nueva credencial",
-        correo=new_row["correo"],
-        estado=dispatch_status
-    )
+    try:
+        dispatch_status = send_notification_email(
+            trabajador_nombre=new_row["nombre_completo"],
+            numero_trabajador=new_row["numero_trabajador"],
+            numero_tarjeta=new_row["numero_tarjeta"],
+            tipo_evento="Nueva credencial",
+            destinatario=new_row["correo"],
+            fecha_inicio=new_row["fecha_inicio"],
+            fecha_vencimiento=new_row["fecha_vencimiento"],
+            estado_actualizado=new_row["estado_calculado"]
+        )
+        add_notification_history(
+            trabajador_id=new_row["trabajador_id"],
+            numero_tarjeta=new_row["numero_tarjeta"],
+            tipo_evento="Nueva credencial",
+            correo=new_row["correo"],
+            estado=dispatch_status
+        )
+    except Exception as mail_err:
+        print(f"[MAILER WARN] Error al enviar notificación de alta: {mail_err}")
 
     return new_row
 
@@ -441,23 +454,26 @@ async def update_existing_worker(
 
     # Automated Notification: 'Modificación vigencia' if expiration changed
     if vencimiento_changed:
-        dispatch_status = send_notification_email(
-            trabajador_nombre=updated_row["nombre_completo"],
-            numero_trabajador=updated_row["numero_trabajador"],
-            numero_tarjeta=updated_row["numero_tarjeta"],
-            tipo_evento="Modificación vigencia",
-            destinatario=updated_row["correo"],
-            fecha_inicio=updated_row["fecha_inicio"],
-            fecha_vencimiento=updated_row["fecha_vencimiento"],
-            estado_actualizado=updated_row["estado_calculado"]
-        )
-        add_notification_history(
-            trabajador_id=updated_row["trabajador_id"],
-            numero_tarjeta=updated_row["numero_tarjeta"],
-            tipo_evento="Modificación vigencia",
-            correo=updated_row["correo"],
-            estado=dispatch_status
-        )
+        try:
+            dispatch_status = send_notification_email(
+                trabajador_nombre=updated_row["nombre_completo"],
+                numero_trabajador=updated_row["numero_trabajador"],
+                numero_tarjeta=updated_row["numero_tarjeta"],
+                tipo_evento="Modificación vigencia",
+                destinatario=updated_row["correo"],
+                fecha_inicio=updated_row["fecha_inicio"],
+                fecha_vencimiento=updated_row["fecha_vencimiento"],
+                estado_actualizado=updated_row["estado_calculado"]
+            )
+            add_notification_history(
+                trabajador_id=updated_row["trabajador_id"],
+                numero_tarjeta=updated_row["numero_tarjeta"],
+                tipo_evento="Modificación vigencia",
+                correo=updated_row["correo"],
+                estado=dispatch_status
+            )
+        except Exception as mail_err:
+            print(f"[MAILER WARN] Error al enviar notificación de vigencia: {mail_err}")
 
     return updated_row
 
@@ -468,34 +484,44 @@ async def toggle_credencial(
     user: dict = Depends(get_current_admin)
 ):
     """Enables or disables a credencial and records deactivation event."""
-    data = await request.json()
-    esta_activa = bool(data.get("esta_activa", True))
+    try:
+        data = await request.json()
+        esta_activa = bool(data.get("esta_activa", True))
 
-    updated_row = toggle_credencial_status(credencial_id, esta_activa)
-    if not updated_row:
-        raise HTTPException(status_code=404, detail={"message": "Credencial no encontrada."})
+        updated_row = toggle_credencial_status(credencial_id, esta_activa)
+        if not updated_row:
+            raise HTTPException(status_code=404, detail={"message": "Credencial no encontrada."})
 
-    # Automated Notification: 'Desactivación' when admin disables card
-    if not esta_activa:
-        dispatch_status = send_notification_email(
-            trabajador_nombre=updated_row["nombre_completo"],
-            numero_trabajador=updated_row["numero_trabajador"],
-            numero_tarjeta=updated_row["numero_tarjeta"],
-            tipo_evento="Desactivación",
-            destinatario=updated_row["correo"],
-            fecha_inicio=updated_row["fecha_inicio"],
-            fecha_vencimiento=updated_row["fecha_vencimiento"],
-            estado_actualizado=updated_row["estado_calculado"]
-        )
-        add_notification_history(
-            trabajador_id=updated_row["trabajador_id"],
-            numero_tarjeta=updated_row["numero_tarjeta"],
-            tipo_evento="Desactivación",
-            correo=updated_row["correo"],
-            estado=dispatch_status
-        )
+        # Automated Notification: 'Desactivación' when admin disables card
+        if not esta_activa:
+            try:
+                dispatch_status = send_notification_email(
+                    trabajador_nombre=updated_row["nombre_completo"],
+                    numero_trabajador=updated_row["numero_trabajador"],
+                    numero_tarjeta=updated_row["numero_tarjeta"],
+                    tipo_evento="Desactivación",
+                    destinatario=updated_row["correo"],
+                    fecha_inicio=updated_row["fecha_inicio"],
+                    fecha_vencimiento=updated_row["fecha_vencimiento"],
+                    estado_actualizado=updated_row["estado_calculado"]
+                )
+                add_notification_history(
+                    trabajador_id=updated_row["trabajador_id"],
+                    numero_tarjeta=updated_row["numero_tarjeta"],
+                    tipo_evento="Desactivación",
+                    correo=updated_row["correo"],
+                    estado=dispatch_status
+                )
+            except Exception as mail_err:
+                print(f"[MAILER WARN] Error al enviar notificación de desactivación: {mail_err}")
 
-    return updated_row
+        return updated_row
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail={"message": f"Error al cambiar estado de la credencial: {str(e)}"})
 
 # ==============================================================================
 # PUBLIC VERIFICATION ENDPOINT (QR CODE DESTINATION)

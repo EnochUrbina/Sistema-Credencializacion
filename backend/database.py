@@ -17,7 +17,7 @@ def get_connection():
     global IS_POSTGRES
     if IS_POSTGRES:
         try:
-            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor, connect_timeout=10)
             conn.autocommit = True
             return conn
         except Exception as e:
@@ -25,7 +25,13 @@ def get_connection():
             IS_POSTGRES = False
 
     db_path = os.path.join(os.path.dirname(__file__), "..", "credenciales.db")
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=30.0, check_same_thread=False)
+    try:
+        conn.execute("PRAGMA journal_mode = WAL;")
+        conn.execute("PRAGMA busy_timeout = 30000;")
+        conn.execute("PRAGMA foreign_keys = ON;")
+    except Exception:
+        pass
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -297,53 +303,75 @@ def _row_to_dict(row) -> Dict[str, Any]:
         d["credencial_id"] = str(d["credencial_id"])
     return d
 
-def get_or_create_area(nombre: str) -> int:
+def get_or_create_area(nombre: str, cur=None) -> int:
     """Finds area ID by name or inserts a new one into the areas catalog."""
-    conn = get_connection()
-    try:
+    nombre = (nombre or "General").strip()
+    owns_conn = False
+    if cur is None:
+        conn = get_connection()
         cur = conn.cursor()
-        nombre = (nombre or "General").strip()
+        owns_conn = True
+    else:
+        conn = getattr(cur, "connection", None)
+
+    try:
         if IS_POSTGRES:
             cur.execute("SELECT id FROM areas WHERE LOWER(nombre) = LOWER(%s)", (nombre,))
             row = cur.fetchone()
             if row:
                 return row["id"]
             cur.execute("INSERT INTO areas (nombre) VALUES (%s) RETURNING id", (nombre,))
-            return cur.fetchone()["id"]
+            res = cur.fetchone()["id"]
+            if conn:
+                conn.commit()
+            return res
         else:
             cur.execute("SELECT id FROM areas WHERE LOWER(nombre) = LOWER(?)", (nombre,))
             row = cur.fetchone()
             if row:
                 return row["id"]
             cur.execute("INSERT INTO areas (nombre) VALUES (?)", (nombre,))
-            conn.commit()
+            if conn:
+                conn.commit()
             return cur.lastrowid
     finally:
-        conn.close()
+        if owns_conn and conn:
+            conn.close()
 
-def get_or_create_cargo(nombre: str) -> int:
+def get_or_create_cargo(nombre: str, cur=None) -> int:
     """Finds cargo ID by name or inserts a new one into the cargos catalog."""
-    conn = get_connection()
-    try:
+    nombre = (nombre or "Personal").strip()
+    owns_conn = False
+    if cur is None:
+        conn = get_connection()
         cur = conn.cursor()
-        nombre = (nombre or "Personal").strip()
+        owns_conn = True
+    else:
+        conn = getattr(cur, "connection", None)
+
+    try:
         if IS_POSTGRES:
             cur.execute("SELECT id FROM cargos WHERE LOWER(nombre) = LOWER(%s)", (nombre,))
             row = cur.fetchone()
             if row:
                 return row["id"]
             cur.execute("INSERT INTO cargos (nombre) VALUES (%s) RETURNING id", (nombre,))
-            return cur.fetchone()["id"]
+            res = cur.fetchone()["id"]
+            if conn:
+                conn.commit()
+            return res
         else:
             cur.execute("SELECT id FROM cargos WHERE LOWER(nombre) = LOWER(?)", (nombre,))
             row = cur.fetchone()
             if row:
                 return row["id"]
             cur.execute("INSERT INTO cargos (nombre) VALUES (?)", (nombre,))
-            conn.commit()
+            if conn:
+                conn.commit()
             return cur.lastrowid
     finally:
-        conn.close()
+        if owns_conn and conn:
+            conn.close()
 
 def get_all_workers() -> List[Dict[str, Any]]:
     """Returns all workers from vista_credenciales_completa."""
@@ -434,12 +462,12 @@ def create_worker(data: dict) -> Dict[str, Any]:
     """
     conn = get_connection()
     try:
+        cur = conn.cursor()
         area_nombre = data.get("area_adscripcion") or data.get("area") or "General"
         cargo_nombre = data.get("cargo") or "Personal"
-        area_id = data.get("area_id") or get_or_create_area(area_nombre)
-        cargo_id = data.get("cargo_id") or get_or_create_cargo(cargo_nombre)
+        area_id = data.get("area_id") or get_or_create_area(area_nombre, cur=cur)
+        cargo_id = data.get("cargo_id") or get_or_create_cargo(cargo_nombre, cur=cur)
 
-        cur = conn.cursor()
         cred_uuid = str(uuid.uuid4())
         activa_val = 1 if data.get("esta_activa", True) else 0
 
@@ -468,6 +496,7 @@ def create_worker(data: dict) -> Dict[str, Any]:
                 cred_uuid, trabajador_id, data["numero_tarjeta"],
                 data["fecha_inicio"], data["fecha_vencimiento"], activa_val
             ))
+            conn.commit()
         else:
             cur.execute("""
                 INSERT INTO trabajadores (
@@ -492,21 +521,21 @@ def create_worker(data: dict) -> Dict[str, Any]:
                 data["fecha_inicio"], data["fecha_vencimiento"], activa_val
             ))
             conn.commit()
-
-        return get_worker_view_by_id(trabajador_id)
     finally:
         conn.close()
+
+    return get_worker_view_by_id(trabajador_id)
 
 def update_worker(trabajador_id: int, data: dict) -> Dict[str, Any]:
     """Updates an existing worker and their credencial."""
     conn = get_connection()
     try:
+        cur = conn.cursor()
         area_nombre = data.get("area_adscripcion") or data.get("area") or "General"
         cargo_nombre = data.get("cargo") or "Personal"
-        area_id = data.get("area_id") or get_or_create_area(area_nombre)
-        cargo_id = data.get("cargo_id") or get_or_create_cargo(cargo_nombre)
+        area_id = data.get("area_id") or get_or_create_area(area_nombre, cur=cur)
+        cargo_id = data.get("cargo_id") or get_or_create_cargo(cargo_nombre, cur=cur)
 
-        cur = conn.cursor()
         activa_val = 1 if data.get("esta_activa", True) else 0
 
         if IS_POSTGRES:
@@ -545,7 +574,9 @@ def update_worker(trabajador_id: int, data: dict) -> Dict[str, Any]:
                 data["numero_tarjeta"], data["fecha_inicio"], data["fecha_vencimiento"],
                 activa_val, trabajador_id
             ))
+            conn.commit()
         else:
+            foto_val = data.get("fotografia_url") or ""
             cur.execute("""
                 UPDATE trabajadores SET
                     numero_trabajador = ?,
@@ -556,14 +587,14 @@ def update_worker(trabajador_id: int, data: dict) -> Dict[str, Any]:
                     correo = ?,
                     area_id = ?,
                     cargo_id = ?,
-                    fotografia_url = CASE WHEN ? != '' THEN ? ELSE fotografia_url END,
+                    fotografia_url = CASE WHEN ? != '' AND ? IS NOT NULL THEN ? ELSE fotografia_url END,
                     contacto_emergencia_nombre = ?,
                     contacto_emergencia_telefono = ?
                 WHERE id = ?
             """, (
                 data["numero_trabajador"], data["nombre_completo"], int(data["edad"]),
                 data["sexo"], data["curp"], data["correo"], area_id,
-                cargo_id, data.get("fotografia_url", ""), data.get("fotografia_url", ""),
+                cargo_id, foto_val, foto_val, foto_val,
                 data["contacto_emergencia_nombre"], data["contacto_emergencia_telefono"],
                 trabajador_id
             ))
@@ -581,14 +612,15 @@ def update_worker(trabajador_id: int, data: dict) -> Dict[str, Any]:
                 activa_val, trabajador_id
             ))
             conn.commit()
-
-        return get_worker_view_by_id(trabajador_id)
     finally:
         conn.close()
+
+    return get_worker_view_by_id(trabajador_id)
 
 def toggle_credencial_status(credencial_id: str, esta_activa: bool) -> Optional[Dict[str, Any]]:
     """Activates or deactivates a credencial."""
     conn = get_connection()
+    cid_str = str(credencial_id).strip()
     try:
         cur = conn.cursor()
         activa_val = 1 if esta_activa else 0
@@ -598,18 +630,19 @@ def toggle_credencial_status(credencial_id: str, esta_activa: bool) -> Optional[
                 UPDATE credenciales
                 SET esta_activa = %s, actualizado_en = CURRENT_TIMESTAMP
                 WHERE id::text = %s
-            """, (activa_val, str(credencial_id)))
+            """, (activa_val, cid_str))
+            conn.commit()
         else:
             cur.execute("""
                 UPDATE credenciales
                 SET esta_activa = ?, actualizado_en = CURRENT_TIMESTAMP
                 WHERE id = ?
-            """, (activa_val, str(credencial_id)))
+            """, (activa_val, cid_str))
             conn.commit()
-
-        return get_worker_view_by_credencial_id(credencial_id)
     finally:
         conn.close()
+
+    return get_worker_view_by_credencial_id(cid_str)
 
 def add_notification_history(trabajador_id: int, numero_tarjeta: str, tipo_evento: str, correo: str, estado: str):
     """Inserts an audit record in historial_notificaciones."""
@@ -622,6 +655,7 @@ def add_notification_history(trabajador_id: int, numero_tarjeta: str, tipo_event
                     trabajador_id, numero_tarjeta, tipo_evento, correo_destinatario, estado_notificacion
                 ) VALUES (%s, %s, %s, %s, %s)
             """, (trabajador_id, numero_tarjeta, tipo_evento, correo, estado))
+            conn.commit()
         else:
             cur.execute("""
                 INSERT INTO historial_notificaciones (
