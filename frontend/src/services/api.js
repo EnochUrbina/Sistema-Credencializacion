@@ -32,11 +32,19 @@ function persist(rows) {
 }
 async function request(path, options = {}) {
   const headers = { Accept: 'application/json', ...options.headers };
+  const token = localStorage.getItem('cacao_session_token');
+  if (token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   if (options.method && !['GET', 'HEAD'].includes(options.method)) headers['X-CSRF-Token'] = await ensureCsrf();
   if (options.body && !(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
   const res = await fetch(BASE + path, { credentials: 'include', ...options, headers });
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 401) {
+      localStorage.removeItem('cacao_session_token');
+      localStorage.removeItem('cacao_user');
+    }
     const error = new Error(data?.message || `Error ${res.status}. No se completó la operación.`);
     error.fields = toFormErrors(data?.errors);
     error.status = res.status;
@@ -63,14 +71,32 @@ export const api = {
       return { nombre: 'Administrador', correo: correo || 'demo@example.test' };
     }
     const user = await request('/login', { method: 'POST', body: JSON.stringify({ correo, password }) });
+    if (user && user.token) {
+      localStorage.setItem('cacao_session_token', user.token);
+    }
+    if (user) {
+      localStorage.setItem('cacao_user', JSON.stringify(user));
+    }
     csrfToken = null;
     return user;
   },
   async me() {
     if (IS_DEMO) return sessionStorage.getItem('credencial-demo-session') ? { nombre: 'Administrador' } : null;
-    return request('/me');
+    try {
+      const u = await request('/me');
+      if (u) {
+        localStorage.setItem('cacao_user', JSON.stringify(u));
+      }
+      return u;
+    } catch (e) {
+      localStorage.removeItem('cacao_session_token');
+      localStorage.removeItem('cacao_user');
+      throw e;
+    }
   },
   async logout() {
+    localStorage.removeItem('cacao_session_token');
+    localStorage.removeItem('cacao_user');
     if (IS_DEMO) { sessionStorage.removeItem('credencial-demo-session'); return; }
     const result = await request('/logout', { method: 'POST' });
     csrfToken = null;

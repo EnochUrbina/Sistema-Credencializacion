@@ -691,6 +691,20 @@ def get_admin_user(correo: str) -> Optional[Dict[str, Any]]:
     finally:
         conn.close()
 
+def get_admin_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+    """Finds an admin user by primary key ID."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        if IS_POSTGRES:
+            cur.execute("SELECT * FROM usuarios_admin WHERE id = %s", (user_id,))
+        else:
+            cur.execute("SELECT * FROM usuarios_admin WHERE id = ?", (user_id,))
+        row = cur.fetchone()
+        return _row_to_dict(row)
+    finally:
+        conn.close()
+
 def create_admin_user(nombre: str, correo: str, password_hash: str):
     """Creates a new admin user."""
     conn = get_connection()

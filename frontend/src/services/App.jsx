@@ -16,19 +16,33 @@ import Settings from '../pages/SettingsView';
 import {api} from './api';
 function currentRoute(){return window.location.hash.slice(1)||'/';}
 function decodedToken(value){try{return decodeURIComponent(value);}catch{return '__invalid_token__';}}
-export default function App(){const[path,setPath]=useState(currentRoute),[user,setUser]=useState(null),[authLoading,setAuthLoading]=useState(true),[workers,setWorkers]=useState([]),[loading,setLoading]=useState(false),[error,setError]=useState(''),[toast,setToast]=useState('');
- useEffect(()=>{const listener=()=>{setPath(currentRoute());window.scrollTo(0,0);};window.addEventListener('hashchange',listener);return()=>window.removeEventListener('hashchange',listener);},[]);
- const isPublic=path.startsWith('/verificar/');
- const refresh=useCallback(async()=>{setLoading(true);setError('');try{setWorkers(await api.workers());}catch(e){setError(e.message);if(e.status===401)setUser(null);}finally{setLoading(false);}},[]);
- useEffect(()=>{let active=true;api.me().then(u=>{if(active)setUser(u);}).catch(()=>{if(active)setUser(null);}).finally(()=>{if(active)setAuthLoading(false);});return()=>{active=false;};},[]);
- useEffect(()=>{if(user&&!isPublic)refresh();},[user,refresh,isPublic]);
- useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),4500);return()=>clearTimeout(t);},[toast]);
- // Actualiza los estados al regresar a la pestaña y cada minuto, incluidos cambios de fecha.
- useEffect(()=>{if(!user||isPublic)return;const tick=()=>{api.workers().then(setWorkers).catch(()=>{});};const t=setInterval(tick,60000);window.addEventListener('focus',tick);return()=>{clearInterval(t);window.removeEventListener('focus',tick);};},[user,isPublic]);
- if(isPublic)return <Verify token={decodedToken(path.slice('/verificar/'.length))}/>;
- if(authLoading)return <Loading/>;
- if(!user)return <ProtectedRoute user={user} fallback={<Login onLogin={setUser}/>}/>;
- async function logout(){try{await api.logout();setUser(null);window.location.hash='/';}catch(e){setToast(e.message);}}
+export default function App(){
+  const [path, setPath] = useState(currentRoute);
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('cacao_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [authLoading, setAuthLoading] = useState(() => !localStorage.getItem('cacao_user'));
+  const [workers, setWorkers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
+  useEffect(()=>{const listener=()=>{setPath(currentRoute());window.scrollTo(0,0);};window.addEventListener('hashchange',listener);return()=>window.removeEventListener('hashchange',listener);},[]);
+  const isPublic=path.startsWith('/verificar/');
+  const refresh=useCallback(async()=>{setLoading(true);setError('');try{setWorkers(await api.workers());}catch(e){setError(e.message);if(e.status===401)setUser(null);}finally{setLoading(false);}},[]);
+  useEffect(()=>{let active=true;api.me().then(u=>{if(active){setUser(u);setAuthLoading(false);}}).catch(()=>{if(active){setUser(null);setAuthLoading(false);}});return()=>{active=false;};},[]);
+  useEffect(()=>{if(user&&!isPublic)refresh();},[user,refresh,isPublic]);
+  useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),4500);return()=>clearTimeout(t);},[toast]);
+  // Actualiza los estados al regresar a la pestaña y cada minuto, incluidos cambios de fecha.
+  useEffect(()=>{if(!user||isPublic)return;const tick=()=>{api.workers().then(setWorkers).catch(()=>{});};const t=setInterval(tick,60000);window.addEventListener('focus',tick);return()=>{clearInterval(t);window.removeEventListener('focus',tick);};},[user,isPublic]);
+  if(isPublic)return <Verify token={decodedToken(path.slice('/verificar/'.length))}/>;
+  if(authLoading)return <Loading/>;
+  if(!user)return <ProtectedRoute user={user} fallback={<Login onLogin={setUser}/>}/>;
+  async function logout(){try{await api.logout();setUser(null);window.location.hash='/';}catch(e){setUser(null);window.location.hash='/';setToast(e.message);}}
  async function saved(w){await refresh();window.location.hash=`/trabajadores/${w.id}`;setToast('Información guardada correctamente.');}
  const parts=path.split('/').filter(Boolean);const worker=workers.find(w=>String(w.id)===parts[1]);let content;
  if(loading)content=<Loading/>;

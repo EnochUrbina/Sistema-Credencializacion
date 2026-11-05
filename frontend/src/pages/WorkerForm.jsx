@@ -1,12 +1,34 @@
 import {useState, useMemo} from 'react';
 import {ArrowLeft, Camera, Save, UserRound, BriefcaseBusiness, ContactRound, ShieldCheck, Check, AlertTriangle, XCircle, Calendar, Lock} from 'lucide-react';
 import {PageHeading, ErrorBox, Avatar, Modal} from '../components/UI';
-import {AREAS} from '../data/demo';
+import {AREAS, CARGOS} from '../data/demo';
 import {api} from '../services/api';
 import {today} from '../services/domain';
 
 export default function WorkerForm({worker, onSaved, workers = []}){
   const isEditing = !!worker;
+
+  // Catálogo dinámico de áreas: predeterminadas + registradas en trabajadores
+  const allAreas = useMemo(() => {
+    const set = new Set(AREAS);
+    workers.forEach(w => {
+      if (w.area && typeof w.area === 'string' && w.area.trim()) {
+        set.add(w.area.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [workers]);
+
+  // Catálogo dinámico de cargos o puestos: predeterminados + registrados en trabajadores
+  const allCargos = useMemo(() => {
+    const set = new Set(CARGOS || []);
+    workers.forEach(w => {
+      if (w.cargo && typeof w.cargo === 'string' && w.cargo.trim()) {
+        set.add(w.cargo.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [workers]);
   const [form, setForm] = useState(worker || {
     nombre_completo: '',
     numero_trabajador: '',
@@ -352,7 +374,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
       </a>
       <PageHeading
         title={worker ? 'Editar trabajador' : 'Registrar trabajador'}
-        description="El formulario cuenta con filtros por pulsación de tecla y verificaciones en tiempo real para garantizar datos institucionales limpios."
+        description="Complete los datos del colaborador para la emisión y control de su credencial institucional."
       />
 
       <form onSubmit={submit} noValidate>
@@ -361,15 +383,12 @@ export default function WorkerForm({worker, onSaved, workers = []}){
             {/* Sección 1: Información Personal */}
             <section className="panel form-panel">
               <h2><UserRound size={19}/> Información personal</h2>
-              <p className="muted">Las entradas numéricas o símbolos no permitidos se bloquean automáticamente al teclear.</p>
+              <p className="muted">Datos personales oficiales del colaborador.</p>
               
               <div className="form-grid">
                 {/* Nombre completo */}
                 <label>
-                  <span>
-                    Nombre completo
-                    <small style={{marginLeft: '6px', color: '#64748b', fontWeight: 'normal'}}>(solo letras y espacios)</small>
-                  </span>
+                  <span>Nombre completo</span>
                   <input
                     value={form.nombre_completo}
                     onChange={e => handleNameChange('nombre_completo', e)}
@@ -382,10 +401,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
 
                 {/* Edad */}
                 <label>
-                  <span>
-                    Edad
-                    <small style={{marginLeft: '6px', color: '#64748b', fontWeight: 'normal'}}>(18 a 99 años)</small>
-                  </span>
+                  <span>Edad</span>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -419,7 +435,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
                 <label>
                   <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                     <span>
-                      CURP Oficial {isEditing && <span style={{fontSize: '10px', color: '#64748b', fontWeight: 'normal'}}>🔒 (Inmutable)</span>}
+                      CURP Oficial {isEditing && <span style={{fontSize: '10px', color: '#64748b', fontWeight: 'normal'}}>(Inmutable)</span>}
                     </span>
                     <span style={{
                       fontSize: '11px',
@@ -461,13 +477,13 @@ export default function WorkerForm({worker, onSaved, workers = []}){
             {/* Sección 2: Información Laboral */}
             <section className="panel form-panel">
               <h2><BriefcaseBusiness size={19}/> Información laboral</h2>
-              <p className="muted">Los identificadores son únicos institucionales y se valida su disponibilidad mientras escribes.</p>
+              <p className="muted">Identificadores institucionales y adscripción laboral.</p>
 
               <div className="form-grid">
                 {/* Número de trabajador */}
                 <label>
                   <span>
-                    Número de trabajador {isEditing ? <span style={{fontSize: '10px', color: '#64748b', fontWeight: 'normal'}}>🔒 (Inmutable)</span> : '(Único)'}
+                    Número de trabajador {isEditing && <span style={{fontSize: '10px', color: '#64748b', fontWeight: 'normal'}}>(Inmutable)</span>}
                   </span>
                   <input
                     value={form.numero_trabajador}
@@ -480,7 +496,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
                   />
                   {isEditing ? (
                     <span style={{color: '#64748b', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px'}}>
-                      <Lock size={12}/> Matrícula institucional permanente (inmutable tras el registro).
+                      <Lock size={12}/> Matrícula institucional asignada en el expediente.
                     </span>
                   ) : (
                     <Feedback fieldKey="numero_trabajador"/>
@@ -490,7 +506,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
                 {/* Número de tarjeta */}
                 <label>
                   <span>
-                    Número de tarjeta {isEditing ? <span style={{fontSize: '10px', color: '#64748b', fontWeight: 'normal'}}>🔒 (Inmutable)</span> : '(Folio único)'}
+                    Número de tarjeta {isEditing && <span style={{fontSize: '10px', color: '#64748b', fontWeight: 'normal'}}>(Inmutable)</span>}
                   </span>
                   <input
                     value={form.numero_tarjeta}
@@ -503,7 +519,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
                   />
                   {isEditing ? (
                     <span style={{color: '#64748b', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px'}}>
-                      <Lock size={12}/> Folio de tarjeta institucional permanente (inmutable tras emisión).
+                      <Lock size={12}/> Folio institucional asignado a la credencial.
                     </span>
                   ) : (
                     <Feedback fieldKey="numero_tarjeta"/>
@@ -519,10 +535,11 @@ export default function WorkerForm({worker, onSaved, workers = []}){
                     onChange={e => update('area', e.target.value)}
                     maxLength={100}
                     placeholder="Seleccionar o escribir área"
+                    autoComplete="off"
                     aria-invalid={submitAttempted && validation.area.status === 'empty'}
                   />
                   <datalist id="areas-list">
-                    {AREAS.map(a => <option value={a} key={a}/>)}
+                    {allAreas.map(a => <option value={a} key={a}/>)}
                   </datalist>
                   <Feedback fieldKey="area"/>
                 </label>
@@ -531,12 +548,17 @@ export default function WorkerForm({worker, onSaved, workers = []}){
                 <label>
                   <span>Cargo o puesto</span>
                   <input
+                    list="cargos-list"
                     value={form.cargo}
                     onChange={e => update('cargo', e.target.value)}
                     maxLength={100}
-                    placeholder="Ej. Maestro Chocolatero / Catador"
+                    placeholder="Seleccionar o escribir cargo o puesto"
+                    autoComplete="off"
                     aria-invalid={submitAttempted && validation.cargo.status === 'empty'}
                   />
+                  <datalist id="cargos-list">
+                    {allCargos.map(c => <option value={c} key={c}/>)}
+                  </datalist>
                   <Feedback fieldKey="cargo"/>
                 </label>
               </div>
@@ -545,7 +567,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
             {/* Sección 3: Contacto de Emergencia */}
             <section className="panel form-panel">
               <h2><ContactRound size={19}/> Contacto de emergencia</h2>
-              <p className="muted">Protegido por privacidad institucional: estos datos no son visibles en el portal público del QR.</p>
+              <p className="muted">Información de contacto para uso administrativo y de seguridad.</p>
               
               <div className="form-grid">
                 {/* Nombre de contacto */}
@@ -672,15 +694,15 @@ export default function WorkerForm({worker, onSaved, workers = []}){
 
             <div className="info-card">
               <ShieldCheck size={22} style={{color: validation._isValid ? '#16a34a' : '#315c87'}}/>
-              <h3>Estado del formulario</h3>
+              <h3>Estado del registro</h3>
               <p style={{fontSize: '12px', marginTop: '6px', lineHeight: '1.5'}}>
                 {validation._isValid ? (
-                  <span style={{color: '#16a34a', fontWeight: '600'}}>
-                    ✓ Todos los datos han sido verificados y son válidos para registrar la credencial.
+                  <span style={{color: '#16a34a', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px'}}>
+                    <Check size={16}/> Información validada para emitir credencial.
                   </span>
                 ) : (
                   <span style={{color: '#64748b'}}>
-                    El formulario valida instantáneamente formato de CURP, unicidad de folio, correspondencia de sexo y 10 dígitos telefónicos.
+                    Complete los campos requeridos para habilitar la emisión de la credencial.
                   </span>
                 )}
               </p>
@@ -700,17 +722,17 @@ export default function WorkerForm({worker, onSaved, workers = []}){
         </div>
       </form>
 
-      {/* MODAL DE DOBLE VERIFICACIÓN INSTITUCIONAL */}
+      {/* MODAL DE CONFIRMACIÓN INSTITUCIONAL */}
       {showConfirm && (
         <Modal
-          title={isEditing ? 'Doble verificación de actualización' : 'Doble verificación de registro'}
+          title={isEditing ? 'Confirmar actualización' : 'Confirmar registro de colaborador'}
           onClose={() => !busy && setShowConfirm(false)}
         >
           <div style={{display: 'flex', flexDirection: 'column', gap: '14px'}}>
             <p className="muted" style={{fontSize: '12px', margin: 0, lineHeight: '1.5'}}>
               {isEditing
-                ? 'Por seguridad institucional y cumplimiento de la normativa, revisa minuciosamente los datos antes de guardarlos en el expediente.'
-                : 'Verifica los datos capturados antes de emitir la credencial oficial y dar de alta al trabajador en la institución.'}
+                ? 'Verifique que la información sea correcta antes de aplicar los cambios en el expediente.'
+                : 'Verifique los datos capturados antes de emitir la credencial oficial.'}
             </p>
 
             <div style={{background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
@@ -721,7 +743,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
               <div style={{display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px'}}>
                 <span style={{color: '#64748b'}}>Número de Trabajador:</span>
                 <strong style={{fontFamily: 'monospace', color: '#1e293b'}}>
-                  {isEditing ? worker.numero_trabajador : form.numero_trabajador} {isEditing && <span style={{fontSize: '10px', color: '#64748b', fontWeight: 'normal'}}>🔒 (Inmutable)</span>}
+                  {isEditing ? worker.numero_trabajador : form.numero_trabajador} {isEditing && <span style={{fontSize: '10px', color: '#64748b', fontWeight: 'normal'}}>(Inmutable)</span>}
                 </strong>
               </div>
               <div style={{display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px'}}>
@@ -753,7 +775,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
             {/* Alerta si cambió el folio de tarjeta */}
             {isEditing && worker.numero_tarjeta !== form.numero_tarjeta && (
               <div style={{background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 12px', fontSize: '11px', color: '#166534', display: 'flex', gap: '8px', alignItems: 'flex-start'}}>
-                <span>💳</span>
+                <BriefcaseBusiness size={16}/>
                 <span>
                   <strong>Reposición física de credencial:</strong> El folio de tarjeta se actualizará de <code>{worker.numero_tarjeta}</code> a <code>{form.numero_tarjeta}</code>.
                 </span>
@@ -763,9 +785,9 @@ export default function WorkerForm({worker, onSaved, workers = []}){
             {/* Alerta si cambió la CURP */}
             {isEditing && worker.curp !== form.curp && (
               <div style={{background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '8px', padding: '10px 12px', fontSize: '11px', color: '#6b21a8', display: 'flex', gap: '8px', alignItems: 'flex-start'}}>
-                <span>🆔</span>
+                <UserRound size={16}/>
                 <span>
-                  <strong>Corrección de CURP:</strong> La clave oficial de RENAPO se actualizará de <code>{worker.curp}</code> a <code>{form.curp}</code>.
+                  <strong>Corrección de CURP:</strong> La clave oficial se actualizará de <code>{worker.curp}</code> a <code>{form.curp}</code>.
                 </span>
               </div>
             )}
@@ -773,9 +795,9 @@ export default function WorkerForm({worker, onSaved, workers = []}){
             {/* Alerta de notificación si cambió la vigencia */}
             {isEditing && worker.fecha_vencimiento !== form.fecha_vencimiento && (
               <div style={{background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 12px', fontSize: '11px', color: '#1e40af', display: 'flex', gap: '8px', alignItems: 'flex-start'}}>
-                <span>📧</span>
+                <ShieldCheck size={16}/>
                 <span>
-                  <strong>Aviso de auditoría:</strong> La fecha de vencimiento cambiará de <code>{worker.fecha_vencimiento}</code> a <code>{form.fecha_vencimiento}</code>. Al confirmar, el sistema enviará un correo institucional automático de actualización al trabajador.
+                  <strong>Aviso de actualización:</strong> La fecha de vencimiento cambiará de <code>{worker.fecha_vencimiento}</code> a <code>{form.fecha_vencimiento}</code>. Al confirmar, el sistema enviará un correo institucional automático de actualización al colaborador.
                 </span>
               </div>
             )}
@@ -783,8 +805,8 @@ export default function WorkerForm({worker, onSaved, workers = []}){
             {/* Aviso de inmutabilidad en edición */}
             {isEditing && (
               <div style={{background: '#fefce8', border: '1px solid #fef08a', borderRadius: '8px', padding: '8px 12px', fontSize: '11px', color: '#854d0e', display: 'flex', gap: '8px', alignItems: 'center'}}>
-                <span>🔒</span>
-                <span>La matrícula de trabajador (número de trabajador) se mantiene protegida e inalterable.</span>
+                <Lock size={14}/>
+                <span>La matrícula del colaborador (número de trabajador) se mantiene protegida e inalterable.</span>
               </div>
             )}
 

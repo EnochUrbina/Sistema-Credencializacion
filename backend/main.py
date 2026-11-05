@@ -120,12 +120,13 @@ async def login(request: Request, response: Response):
         value=session_id,
         httponly=True,
         samesite="lax",
-        max_age=86400 * 7
+        max_age=86400 * 30
     )
     return {
         "id": user["id"],
         "nombre": user["nombre"],
-        "correo": user["correo"]
+        "correo": user["correo"],
+        "token": session_id
     }
 
 @app.get("/api/me")
