@@ -31,7 +31,7 @@ if __name__ == "__main__":
     network_url = f"http://{lan_ip}:{port}"
 
     print("=" * 72)
-    print("   SISTEMA DE CREDENCIALIZACIÓN WEB - HACKATÓN 2026")
+    print("   CACAO DEL SUR - SISTEMA DE CREDENCIALIZACIÓN Y CONTROL DE PERSONAL")
     print("=" * 72)
     if is_cloud:
         print(f" * Modo Producción en la Nube activo en el puerto: {port}")
@@ -41,7 +41,7 @@ if __name__ == "__main__":
         print("   (Los códigos QR generados en las credenciales usan esta dirección)")
     print("-" * 72)
     print(" * Credenciales de Administrador:")
-    print("   - Correo: admin@institucion.edu.mx")
+    print("   - Correo: admin@cacaodelsur.com  (o admin@institucion.edu.mx)")
     print("   - Contraseña: admin123")
     print("=" * 72)
 

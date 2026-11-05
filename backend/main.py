@@ -192,27 +192,31 @@ def _validate_worker_fields(data: dict, is_update: bool = False, worker_id: Opti
     elif not re.match(email_pattern, correo):
         errors["correo"] = ["Ingresa una dirección de correo válida (ejemplo: usuario@institucion.edu.mx)."]
 
-    # 6. Número de trabajador: Alfanumérico con guiones/puntos, longitud 2-20
+    # 6. Número de trabajador: Formato institucional Cacao del Sur (ej. CS-PRD-101 o CS-101)
     num_trab = str(data.get("numero_trabajador") or "").strip().upper()
     if not num_trab:
         errors["numero_trabajador"] = ["El número de trabajador es obligatorio."]
-    elif len(num_trab) < 2:
-        errors["numero_trabajador"] = ["Mínimo 2 caracteres."]
+    elif len(num_trab) < 4:
+        errors["numero_trabajador"] = ["Mínimo 4 caracteres (formato CS-ÁREA-XXX)."]
     elif len(num_trab) > 20:
         errors["numero_trabajador"] = ["Máximo 20 caracteres."]
     elif not re.match(r"^[A-Za-z0-9\-_.]+$", num_trab):
-        errors["numero_trabajador"] = ["Solo se permiten letras, números, guiones y puntos (sin espacios ni símbolos raros)."]
+        errors["numero_trabajador"] = ["Solo se permiten letras, números y guiones."]
+    elif not ("-" in num_trab):
+        errors["numero_trabajador"] = ["Debe incluir guion separador según formato corporativo (ej. CS-PRD-101)."]
 
-    # 7. Número de tarjeta: Alfanumérico con guiones/puntos, longitud 3-50
+    # 7. Número de tarjeta: Folio único institucional (ej. TAR-PRD-1001 o TAR-1001)
     num_tarj = str(data.get("numero_tarjeta") or "").strip().upper()
     if not num_tarj:
         errors["numero_tarjeta"] = ["El número de tarjeta es obligatorio."]
-    elif len(num_tarj) < 3:
-        errors["numero_tarjeta"] = ["Mínimo 3 caracteres."]
+    elif len(num_tarj) < 5:
+        errors["numero_tarjeta"] = ["Mínimo 5 caracteres (ej. TAR-PRD-1001 o TAR-1001)."]
     elif len(num_tarj) > 50:
         errors["numero_tarjeta"] = ["Máximo 50 caracteres."]
     elif not re.match(r"^[A-Za-z0-9\-_.]+$", num_tarj):
-        errors["numero_tarjeta"] = ["Solo se permiten letras, números, guiones y puntos."]
+        errors["numero_tarjeta"] = ["Solo se permiten letras, números y guiones."]
+    elif not num_tarj.startswith("TAR-"):
+        errors["numero_tarjeta"] = ["El folio de tarjeta debe iniciar con el prefijo oficial 'TAR-' (ej. TAR-PRD-1001)."]
 
     # 8. Área de adscripción: Longitud 2-100, caracteres alfanuméricos y acentos
     area = str(data.get("area_adscripcion") or data.get("area") or "").strip()
@@ -419,12 +423,11 @@ async def update_existing_worker(
         if k in data and isinstance(data[k], str):
             data[k] = data[k].strip()
 
-    # Criterio institucional de inmutabilidad:
-    # La matrícula o número de trabajador es el identificador permanente de nómina y no puede modificarse.
-    # El folio de tarjeta (por reposición/extravío físico) y la CURP (por corrección o resolución RENAPO) sí son editables.
+    # Criterio estricto de inmutabilidad institucional Cacao del Sur:
+    # La matrícula y el folio de tarjeta son inmutables una vez asignados al expediente físico y digital.
+    # Únicamente la CURP puede ser rectificada ante correcciones o resoluciones de RENAPO.
     data["numero_trabajador"] = existing["numero_trabajador"]
-    if not data.get("numero_tarjeta"):
-        data["numero_tarjeta"] = existing["numero_tarjeta"]
+    data["numero_tarjeta"] = existing["numero_tarjeta"]
     if not data.get("curp"):
         data["curp"] = existing["curp"]
 

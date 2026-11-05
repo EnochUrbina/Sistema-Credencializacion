@@ -153,33 +153,35 @@ export default function WorkerForm({worker, onSaved, workers = []}){
       }
     }
 
-    // 6. Número de trabajador (Duplicados)
+    // 6. Número de trabajador (Formato CS-ÁREA-XXX + Duplicados)
     const numTrab = (form.numero_trabajador || '').trim().toUpperCase();
     if (!numTrab) {
       v.numero_trabajador = { status: 'empty', msg: 'Identificador único requerido' };
-    } else if (numTrab.length < 2) {
-      v.numero_trabajador = { status: 'warn', msg: 'Mínimo 2 caracteres' };
+    } else if (numTrab.length < 4 || !numTrab.includes('-')) {
+      v.numero_trabajador = { status: 'warn', msg: 'Formato corporativo requerido (ej. CS-PRD-101)' };
     } else {
       const dupTrab = workers.find(w => String(w.id) !== String(currentId) && (w.numero_trabajador || '').toUpperCase() === numTrab);
       if (dupTrab) {
         v.numero_trabajador = { status: 'error', msg: `Ya asignado a: ${dupTrab.nombre_completo}` };
       } else {
-        v.numero_trabajador = { status: 'ok', msg: 'Número disponible' };
+        v.numero_trabajador = { status: 'ok', msg: 'Número institucional disponible' };
       }
     }
 
-    // 7. Número de tarjeta (Folio único + Duplicados)
+    // 7. Número de tarjeta (Folio único TAR-ÁREA-XXXX + Duplicados)
     const numTarj = (form.numero_tarjeta || '').trim().toUpperCase();
     if (!numTarj) {
       v.numero_tarjeta = { status: 'empty', msg: 'Folio único de credencial requerido' };
-    } else if (numTarj.length < 3) {
-      v.numero_tarjeta = { status: 'warn', msg: 'Mínimo 3 caracteres' };
+    } else if (!numTarj.startsWith('TAR-')) {
+      v.numero_tarjeta = { status: 'warn', msg: "Debe iniciar con prefijo 'TAR-' (ej. TAR-PRD-1001)" };
+    } else if (numTarj.length < 5) {
+      v.numero_tarjeta = { status: 'warn', msg: 'Mínimo 5 caracteres' };
     } else {
       const dupTarj = workers.find(w => String(w.id) !== String(currentId) && (w.numero_tarjeta || '').toUpperCase() === numTarj);
       if (dupTarj) {
         v.numero_tarjeta = { status: 'error', msg: `Ya asignado a: ${dupTarj.nombre_completo}` };
       } else {
-        v.numero_tarjeta = { status: 'ok', msg: 'Folio disponible' };
+        v.numero_tarjeta = { status: 'ok', msg: 'Folio institucional disponible' };
       }
     }
 
@@ -473,7 +475,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
                     maxLength={20}
                     disabled={isEditing}
                     style={isEditing ? {background: '#f8fafc', color: '#475569', cursor: 'not-allowed', borderColor: '#e2e8f0'} : {}}
-                    placeholder="Ej. TR-011"
+                    placeholder="Ej. CS-PRD-101"
                     aria-invalid={validation.numero_trabajador.status === 'error' || (submitAttempted && validation.numero_trabajador.status === 'empty')}
                   />
                   {isEditing ? (
@@ -487,15 +489,25 @@ export default function WorkerForm({worker, onSaved, workers = []}){
 
                 {/* Número de tarjeta */}
                 <label>
-                  <span>Número de tarjeta (Folio único)</span>
+                  <span>
+                    Número de tarjeta {isEditing ? <span style={{fontSize: '10px', color: '#64748b', fontWeight: 'normal'}}>🔒 (Inmutable)</span> : '(Folio único)'}
+                  </span>
                   <input
                     value={form.numero_tarjeta}
                     onChange={e => handleCodeChange('numero_tarjeta', e)}
                     maxLength={50}
-                    placeholder="Ej. TAR-1011"
+                    disabled={isEditing}
+                    style={isEditing ? {background: '#f8fafc', color: '#475569', cursor: 'not-allowed', borderColor: '#e2e8f0'} : {}}
+                    placeholder="Ej. TAR-PRD-1001"
                     aria-invalid={validation.numero_tarjeta.status === 'error' || (submitAttempted && validation.numero_tarjeta.status === 'empty')}
                   />
-                  <Feedback fieldKey="numero_tarjeta"/>
+                  {isEditing ? (
+                    <span style={{color: '#64748b', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px'}}>
+                      <Lock size={12}/> Folio de tarjeta institucional permanente (inmutable tras emisión).
+                    </span>
+                  ) : (
+                    <Feedback fieldKey="numero_tarjeta"/>
+                  )}
                 </label>
 
                 {/* Área de adscripción */}
@@ -511,12 +523,6 @@ export default function WorkerForm({worker, onSaved, workers = []}){
                   />
                   <datalist id="areas-list">
                     {AREAS.map(a => <option value={a} key={a}/>)}
-                    <option value="Sistemas"/>
-                    <option value="Recursos Humanos"/>
-                    <option value="Administración"/>
-                    <option value="Biblioteca"/>
-                    <option value="Mantenimiento"/>
-                    <option value="Dirección General"/>
                   </datalist>
                   <Feedback fieldKey="area"/>
                 </label>
@@ -528,7 +534,7 @@ export default function WorkerForm({worker, onSaved, workers = []}){
                     value={form.cargo}
                     onChange={e => update('cargo', e.target.value)}
                     maxLength={100}
-                    placeholder="Ej. Líder de Desarrollo Web"
+                    placeholder="Ej. Maestro Chocolatero / Catador"
                     aria-invalid={submitAttempted && validation.cargo.status === 'empty'}
                   />
                   <Feedback fieldKey="cargo"/>

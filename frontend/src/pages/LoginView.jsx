@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ContactRound, LogIn } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { api, IS_DEMO } from '../services/api';
 import { ErrorBox } from '../components/UI';
 
@@ -21,20 +21,23 @@ export default function Login({ onLogin }) {
   return (
     <div className="login-page">
       <form onSubmit={submit} className="login-form">
-        <div className="login-title"><ContactRound size={32} /><h1>Sistema de credencialización</h1></div>
-        <p className="muted">Acceso de administrador</p>
+        <div className="login-brand-header">
+          <img src="/assets/logo_cacao.jpg" alt="Cacao del Sur" className="login-logo-img" />
+          <h1>Cacao del Sur</h1>
+          <p>Portal de Credencialización y Control de Personal</p>
+        </div>
+        <p className="muted" style={{ textAlign: 'center', marginBottom: '16px' }}>Acceso de personal autorizado</p>
         {error && <ErrorBox message={error} />}
-        <label>Correo electrónico
-          <input type="email" autoComplete="username" placeholder="Correo electrónico" value={email} onChange={(e) => setEmail(e.target.value)} required={!IS_DEMO} />
+        <label>Correo electrónico institucional
+          <input type="email" autoComplete="username" placeholder="admin@cacaodelsur.com" value={email} onChange={(e) => setEmail(e.target.value)} required={!IS_DEMO} />
         </label>
         <label>Contraseña
-          <input type="password" autoComplete="current-password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required={!IS_DEMO} />
+          <input type="password" autoComplete="current-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required={!IS_DEMO} />
         </label>
         <button className="btn btn-primary w-full" disabled={busy}>
-          <LogIn size={17} />{busy ? 'Ingresando…' : IS_DEMO ? 'Entrar a la demostración' : 'Iniciar sesión'}
+          <LogIn size={17} />{busy ? 'Ingresando…' : 'Iniciar sesión'}
         </button>
-        {IS_DEMO && <div className="demo-note"><strong>Versión de prueba</strong><p>Puedes entrar sin correo ni contraseña. Los datos son ficticios y los cambios se guardan solo en este navegador; este acceso no autentica usuarios reales.</p></div>}
-        <p className="login-help">Proyecto académico · Hackatón 2026</p>
+        <p className="login-help">© 2026 Cacao del Sur S.A. de C.V. · Acceso Restringido</p>
       </form>
     </div>
   );
