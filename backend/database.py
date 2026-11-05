@@ -13,16 +13,21 @@ if IS_POSTGRES:
     from psycopg2.extras import RealDictCursor
 
 def get_connection():
-    """Returns a database connection (PostgreSQL or SQLite)."""
+    """Returns a database connection (PostgreSQL or fallback SQLite)."""
+    global IS_POSTGRES
     if IS_POSTGRES:
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-        conn.autocommit = True
-        return conn
-    else:
-        db_path = os.path.join(os.path.dirname(__file__), "..", "credenciales.db")
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+            conn.autocommit = True
+            return conn
+        except Exception as e:
+            print(f"[ALERTA DATABASE] Error al conectar a PostgreSQL ({e}). Cambiando a SQLite de respaldo.")
+            IS_POSTGRES = False
+
+    db_path = os.path.join(os.path.dirname(__file__), "..", "credenciales.db")
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
     """Initializes tables, catalogs, views and triggers."""
