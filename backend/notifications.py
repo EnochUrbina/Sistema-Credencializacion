@@ -7,6 +7,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+GOOGLE_SCRIPT_URL = os.getenv(
+    "GOOGLE_SCRIPT_URL",
+    "https://script.google.com/macros/s/AKfycbx1hs7ZUJVbXrj7h8qxviReoX58nXcByYRLsJVQsRGMETxkJgQBjcT_cCbXLkbxu1Bu/exec"
+).strip()
+
 SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
@@ -91,7 +96,34 @@ def send_notification_email(
     </html>
     """
 
-    # 1. Envío mediante SMTP (Gmail, Outlook, Hostinger, Mailgun, etc.)
+    # 1. Prioridad: Envío mediante Google Apps Script Web App (HTTPS Puerto 443 - Nunca bloqueado por Render)
+    if GOOGLE_SCRIPT_URL:
+        try:
+            import urllib.request
+            import urllib.error
+            import json
+
+            payload = {
+                "to": destinatario,
+                "subject": asunto,
+                "html": html_content
+            }
+            req = urllib.request.Request(
+                GOOGLE_SCRIPT_URL,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "CacaoDelSur-Credenciales/1.0"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                resp_data = resp.read().decode("utf-8")
+                print(f"[MAILER GOOGLE APPS SCRIPT] Correo entregado exitosamente a {destinatario}: {resp_data}")
+                return "Enviado"
+        except Exception as e:
+            print(f"[MAILER GOOGLE SCRIPT WARN] Falló envío vía Google Script ({e}). Intentando respaldo SMTP...")
+
+    # 2. Respaldo: Envío mediante SMTP clásico
     if SMTP_HOST and SMTP_USER and SMTP_PASSWORD:
         try:
             msg = MIMEMultipart("alternative")
@@ -101,13 +133,11 @@ def send_notification_email(
             msg.attach(MIMEText(html_content, "html", "utf-8"))
 
             if SMTP_PORT == 465:
-                # SSL directo
-                with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=12) as server:
+                with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=8) as server:
                     server.login(SMTP_USER, SMTP_PASSWORD)
                     server.sendmail(SMTP_FROM, [destinatario], msg.as_string())
             else:
-                # STARTTLS (puerto 587 o 25)
-                with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as server:
+                with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=8) as server:
                     server.starttls()
                     server.login(SMTP_USER, SMTP_PASSWORD)
                     server.sendmail(SMTP_FROM, [destinatario], msg.as_string())
@@ -116,9 +146,8 @@ def send_notification_email(
             return "Enviado"
         except Exception as e:
             print(f"[MAILER SMTP ERROR] {e}")
-            return f"Error SMTP: {str(e)[:30]}"
 
-    # 2. Resend API como alternativa HTTP
+    # 3. Resend API como alternativa HTTP
     resend_key = os.getenv("RESEND_API_KEY", "").strip()
     if resend_key:
         try:
@@ -140,34 +169,12 @@ def send_notification_email(
                     "User-Agent": "CacaoDelSur-Credenciales/1.0"
                 }
             )
-            try:
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    print(f"[MAILER RESEND] Correo enviado exitosamente a {destinatario}!")
-                    return "Enviado"
-            except urllib.error.HTTPError as err:
-                err_body = err.read().decode("utf-8")
-                # Si está en modo prueba de Resend (solo permite enviar al correo de la cuenta)
-                if "only send testing emails to your own email address" in err_body:
-                    fallback_owner = os.getenv("ADMIN_EMAIL", "admin@cacaodelsur.com")
-                    payload["to"] = [fallback_owner]
-                    payload["subject"] = f"[Prueba para: {destinatario}] {asunto}"
-                    req2 = urllib.request.Request(
-                        "https://api.resend.com/emails",
-                        data=json.dumps(payload).encode("utf-8"),
-                        headers={
-                            "Authorization": f"Bearer {resend_key}",
-                            "Content-Type": "application/json",
-                            "User-Agent": "CacaoDelSur-Credenciales/1.0"
-                        }
-                    )
-                    with urllib.request.urlopen(req2, timeout=10) as resp2:
-                        print(f"[MAILER RESEND] Correo de prueba entregado a {fallback_owner}!")
-                        return "Enviado (Modo Prueba Resend)"
-                raise
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                print(f"[MAILER RESEND] Correo enviado exitosamente a {destinatario}!")
+                return "Enviado"
         except Exception as e:
             print(f"[MAILER RESEND ERROR] {e}")
-            return f"Error Resend: {str(e)[:30]}"
 
-    # 3. Modo Simulado / Sin SMTP configurado
+    # 4. Modo Simulado / Registro interno
     print(f"[MAILER SIMULADO] Correo preparado para {destinatario} | Evento: {tipo_evento} | Tarjeta: {numero_tarjeta} | Estado: {estado_actualizado}")
-    return "Simulado (Sin SMTP)"
+    return "Simulado"
